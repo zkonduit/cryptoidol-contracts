@@ -8,6 +8,6 @@ contract CryptoIdolTest is Test {
     CryptoIdol public ci;
 
     function setUp() public {
-        ci = new CryptoIdol();
+        ci = new CryptoIdol(address(this), address(this));
     }
 }
