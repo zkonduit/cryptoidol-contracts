@@ -244,7 +244,7 @@ contract CryptoIdol is ERC721, Ownable {
     function mint(bytes calldata proof, uint256[] calldata instances) external {
         ++tokenCount;
 
-        if (tokenCount <= maxTokenCount) {
+        if (tokenCount > maxTokenCount) {
             revert MINTED_OUT();
         }
 
