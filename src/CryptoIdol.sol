@@ -30,9 +30,9 @@ contract CryptoIdol is ERC721, Ownable {
         // initialize bgPalette
         // yellow
         bgPalette[0] = '#FFD53E';
-        // red
+        // white
         bgPalette[1] = '#FFFFFF';
-        // grey
+        // dark grey
         bgPalette[2] = '#444444';
         // pink
         bgPalette[3] = '#FF8B8B';
@@ -44,6 +44,8 @@ contract CryptoIdol is ERC721, Ownable {
         bgPalette[6] = '#AAFFA3';
         // red
         bgPalette[7] = '#FF4848';
+        // purple
+        bgPalette[8] = '#7920C0';
 
         // initialize skinPalette
         // fair
@@ -60,11 +62,16 @@ contract CryptoIdol is ERC721, Ownable {
     }
 
     function symbol() public pure override returns (string memory) {
-        return "CI";
+        return "IDOL";
     }
 
     function tokenURI(uint256 id) public view override returns (string memory) {
-        uint256 number = score[id] + uint256(uint160(minter[id])) + mintTime[id];
+        if (!_exists(id)) {
+            revert TokenDoesNotExist();
+        }
+
+        // uint256 number = score[id] + uint256(uint160(minter[id])) + mintTime[id] + id;
+        uint256 number = id;
 
         string memory image = string(abi.encodePacked(
             '<svg width="1000" height="1000" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg">',
@@ -130,7 +137,7 @@ contract CryptoIdol is ERC721, Ownable {
             // middle part
             string(abi.encodePacked('<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C680.1 474 651.667 322.5 630.5 260.5C642.9 346.1 630.5 353.045 624.5 352.5C580.5 348.5 517.5 286.667 495.5 260.5C469.333 290.167 410.7 359.7 353.5 366.5C352.379 345.038 353.228 295.75 365.01 264.247C313.973 394.722 349.044 531.23 371 590C275 502 245.009 452.5 261 302Z" stroke="black" stroke-width="10" fill="', bgPalette[uint8((number + 1) % 8)], '"/>')),
             // side part
-            string(abi.encodePacked('<path d="M730 381C730 426.209 704.612 467.59 662.659 497.861C620.712 528.126 562.513 547 498 547C433.487 547 375.288 528.126 333.341 497.861C291.388 467.59 266 426.209 266 381C266 335.791 291.388 294.41 333.341 264.139C375.288 233.874 433.487 215 498 215C562.513 215 620.712 233.874 662.659 264.139C704.612 294.41 730 335.791 730 381Z" fill="', bgPalette[uint8(number + 1) % 8], '" stroke="black" stroke-width="10"/> <path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C680.1 474 651.667 322.5 630.5 260.5C633.667 271.333 635.548 308.612 638 327C561.716 351.037 401.534 383.4 343.075 371L351 314.388L366.5 260.5C313.3 392.1 348.833 530.667 371 590C275 502 245.009 452.5 261 302Z" fill="#FF8B8B" stroke="black" stroke-width="10"/>'))
+            string(abi.encodePacked('<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C680.1 474 651.667 322.5 630.5 260.5C633.667 271.333 635.548 308.612 638 327C561.716 351.037 401.534 383.4 343.075 371L351 314.388L366.5 260.5C313.3 392.1 348.833 530.667 371 590C275 502 245.009 452.5 261 302Z" fill="', bgPalette[uint8((number + 1) % 8)], '" stroke="black" stroke-width="10"/>'))
         ];
 
         return [
@@ -186,7 +193,7 @@ contract CryptoIdol is ERC721, Ownable {
         return string(abi.encodePacked(
             '<path d="M353.5 784.5C368.7 758.1 423.5 614.167 449 545.5H554.5L647 784.5C527.8 849.7 401.667 811.667 353.5 784.5Z" fill="', bgPalette[uint8((number + 5) % 8)], '" stroke="black" stroke-width="10"/>',
             '<path d="M385.5 671.5C373.5 637.1 418.167 580.5 442.5 553L436.75 615L468 598.5C460.4 615.7 471.167 646.667 477.5 660L412.5 692C399.5 694.5 389 676.5 385.5 671.5Z" fill="', bgPalette[uint8((number + 7) % 8)], '"/>',
-            '<path d="M656.5 692L554.5 546L567.5 660L622 731L656.5 692Z" fill="',  bgPalette[uint8((number + 1) % 8)], '"/>',
+            '<path d="M656.5 692L554.5 546L567.5 660L622 731L656.5 692Z" fill="',  bgPalette[uint8((number + 7) % 8)], '"/>',
             '<path d="M405.5 631.5L436.75 615M436.75 615L468 598.5C460.4 615.7 471.167 646.667 477.5 660L412.5 692C399.5 694.5 389 676.5 385.5 671.5C373.5 637.1 418.167 580.5 442.5 553L436.75 615ZM554.5 546L656.5 692L622 731L567.5 660L554.5 546Z" stroke="black" stroke-width="10"/>'
         ));
     }
@@ -217,7 +224,7 @@ contract CryptoIdol is ERC721, Ownable {
             // none
             '',
             // cap
-            string(abi.encodePacked('<path d="M329.5 188C292.7 92.8 381.167 43 430 30C549.6 1.99999 592.5 84.6667 599 129.5L329.5 188Z" fill="#5283FF" stroke="black" stroke-width="10"/> <path d="M217.5 233L329.5 189L323.5 172.5L217.5 233Z" fill="', bgPalette[uint8((number + 2) % 8)], '" stroke="black" stroke-width="10"/>')),
+            string(abi.encodePacked('<path d="M329.5 188C292.7 92.8 381.167 43 430 30C549.6 1.99999 592.5 84.6667 599 129.5L329.5 188Z" fill="',  bgPalette[uint8((number + 2) % 8)],'" stroke="black" stroke-width="10"/> <path d="M217.5 233L329.5 189L323.5 172.5L217.5 233Z" fill="', bgPalette[uint8((number + 2) % 8)], '" stroke="black" stroke-width="10"/>')),
             // cat ear
             '<path d="M292.5 207.5C269.3 169.5 275.167 108.833 281.5 87.5C305.9 87.5 359.5 114.333 373.5 133C331.5 158 317.5 175 292.5 207.5Z" fill="white" stroke="black" stroke-width="10"/> <path d="M306 182C294.4 169.6 292.833 132.5 293.5 115.5C299.5 100.3 334 126.833 350.5 142C334.9 152 314.333 172.833 306 182Z" fill="#FFBCBC"/> <path d="M692.331 208.534C716.779 171.325 712.928 110.497 707.305 88.965C682.919 88.1556 628.459 113.196 613.848 131.388C654.995 157.768 668.423 175.223 692.331 208.534Z" fill="white" stroke="black" stroke-width="10"/> <path d="M679.685 182.6C691.689 170.592 694.486 133.564 694.383 116.552C688.891 101.161 653.53 126.535 636.536 141.146C651.796 151.658 671.66 173.162 679.685 182.6Z" fill="#FFBCBC"/>',
             // bunny ear
