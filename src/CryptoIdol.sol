@@ -75,7 +75,7 @@ contract CryptoIdol is ERC721, Ownable {
 
         string memory image = string(abi.encodePacked(
             '<svg width="1000" height="1000" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg">',
-            _renderSvg1(number),
+            _renderSvgPart1(number),
             // eye
             _renderEye(number),
             // legs
@@ -104,7 +104,7 @@ contract CryptoIdol is ERC721, Ownable {
     }
 
     // extract some elements to prevent stack too deep errors
-    function _renderSvg1(uint256 number) internal view returns (string memory) {
+    function _renderSvgPart1(uint256 number) internal view returns (string memory) {
         return string(abi.encodePacked(
             // bg
             _renderBg(number),
