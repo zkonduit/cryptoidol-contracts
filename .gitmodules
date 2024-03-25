@@ -1,3 +1,6 @@
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/lib/forge-std
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/lib/solady
