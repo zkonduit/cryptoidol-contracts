@@ -1,31 +1,98 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.20;
 
-import {ERC721} from "solady/src/tokens/ERC721.sol";
-import {Ownable} from "solady/src/auth/Ownable.sol";
-import {Base64} from "solady/src/utils/Base64.sol";
+import {ERC721} from "lib/solady/src/tokens/ERC721.sol";
+import {Ownable} from "solady/auth/Ownable.sol";
+import {Base64} from "solady/utils/Base64.sol";
 import {IVerifier} from "./IVerifier.sol";
 
+error COMMIT_ALREADY_EXISTS();
+error NOT_COMMITTER();
+error ALREADY_REVEALED();
+error CHEAPSKATE();
 error MINTED_OUT();
 error VERIFICATION_FAILED();
 
+/**
+ * @notice CryptoIdol NFT Contract, Sing to Mint a CryptoIdol!
+ * @author jseam
+ *
+ *                    __ ~~~~~~~~~~~~~~~~~~~~~~~~~~~____
+ *                  ~~                                  ~~~
+ *               ~~~                                      ~~~
+ *             ~~~                                           ~~
+ *           ~~                                                 ~
+ *          ~                                                    ~
+ *        ~                                                        ~
+ *       ~            ~          ~               ~ ~               ~
+ *       ~          ~~         ~~              ~~   ~    ~~         ~
+ *      ~~          ~~      ~~~~              ~~     ~   ~~         ~~
+ *      ~~         ~~  ~~   ~~    ~~~~~   ~~~          ~ ~~         ~~
+ *      ~~         ~~~    ~~~~~~~~ ~~~~~~~~             ~~~         ~~
+ *      ~~         ~     ~~~~~~   ~~~~~~            ~~    ~          ~
+ *      ~~         ~   ~~ ~~~~~~~              ~~~~~~  ~  ~~        ~~
+ *      ~~        ~~  ~~~~~~~~~~~              ~~~~~~~~ ~~~~        ~~
+ *       ~         ~ ~~ ~~~~~   ~             ~~~~~   ~~ ~~~        ~~
+ *       ~~        ~    ~~~~~~~~~             ~~~~~~~~~~  ~~        ~~
+ *       ~~        ~    ~~~~~~~~~     ___     ~~~~~~~~~   ~~        ~
+ *         ~~      ~~                |   |               ~~       ~~
+ *          ~~     ~~                 ~~~                 ~       ~~
+ *          ~~~     ~~              ~~~~~~~              ~~     ~~
+ *         ~~ ~~    ~~~~~~        ~~~     ~~~         ~~~~~    ~~
+ *         ~   ~~~  ~~   ~~~~~~~ ~~         ~~~~~~~~~~~  ~~   ~~ ~~
+ *        ~~     ~~~ ~~        ~~~           ~~~~        ~     ~~   ~
+ *       ~~        ~~~~        ~~~~          ~~~~       ~~  ~~~     ~~
+ *       ~~          ~~~      ~~~~~~       ~~~~~~~     ~~~~~~        ~~
+ *      ~~                 ~~~ ~~~~~~~~~~~~~~~~~~ ~~                   ~
+ *     ~~                 ~~~  ~~~~~~     ~~~~~~~  ~~~                 ~~
+ *     ~~                ~~~~~~~~ ~~      ~~~~~~~   ~~~                 ~~
+ *     ~                 ~~~~~     ~~     ~~~~~~~    ~~~                 ~
+ *    ~~                ~~         ~~~~~~~~~~~~~~~     ~~                ~~
+ *    ~~  ~~            ~~      ~~~~~~    ~~~~~~~~~     ~~~         ~    ~~
+ *    ~~ ~~~             ~~  ~~~~~~~~~~~~~~~~~~~~~~~     ~~~        ~~   ~~
+ *    ~~~ ~~    ~~      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~   ~~~   ~~ ~~~
+ *         ~~   ~~~     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~     ~~~  ~~
+ *                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *                         ~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *                           ~       ~~~~~      ~~
+ *                           ~       ~~  ~      ~
+ *                           ~~      ~   ~      ~
+ *                            ~     ~~    ~     ~
+ *                             ~   ~~     ~~   ~
+ *                              ~~~~        ~~~
+ */
 contract CryptoIdol is ERC721, Ownable {
     IVerifier public verifier;
     uint256 public tokenCount;
     uint256 public maxTokenCount = 10_000;
+    uint256 public mintPrice;
 
+    struct Commit {
+        address committer;
+        uint64 commitTime;
+        uint64 revealTime;
+    }
+
+    mapping (bytes32 => Commit) commits;
     mapping (uint256 => uint256) score;
     mapping (uint256 => address) minter;
     mapping (uint256 => uint256) mintTime;
     mapping (uint8 => string) bgPalette;
     mapping (uint8 => string) skinPalette;
 
+    /// @notice constructor to initialize contract
+    /// @param owner_ owner address that has control over the contract
+    /// @param verifier_ ezkl verifier used in the contract
+    /// @param mintPrice_ cost in wei (10^18 wei == 1 ether)
     constructor(
         address owner_,
-        address verifier_
+        address verifier_,
+        uint256 mintPrice_
     ) {
         _initializeOwner(owner_);
         verifier = IVerifier(verifier_);
+        mintPrice = mintPrice_;
+
 
         // initialize bgPalette
         // yellow
@@ -62,7 +129,7 @@ contract CryptoIdol is ERC721, Ownable {
     }
 
     function symbol() public pure override returns (string memory) {
-        return "IDOL";
+        return "IDOLNFT";
     }
 
     function tokenURI(uint256 id) public view override returns (string memory) {
@@ -70,26 +137,12 @@ contract CryptoIdol is ERC721, Ownable {
             revert TokenDoesNotExist();
         }
 
-        // uint256 number = score[id] + uint256(uint160(minter[id])) + mintTime[id] + id;
         uint256 number = id;
 
         string memory image = string(abi.encodePacked(
             '<svg width="1000" height="1000" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg">',
             _renderSvgPart1(number),
-            // eye
-            _renderEye(number),
-            // legs
-            _renderSkin(number)[1],
-            // dress
-            _renderDress(number),
-            // mouth
-            '<path d="M522.5 484C522.5 494.436 512.562 503.5 499.5 503.5C486.438 503.5 476.5 494.436 476.5 484C476.5 473.564 486.438 464.5 499.5 464.5C512.562 464.5 522.5 473.564 522.5 484Z" fill="#FF8181" stroke="black" stroke-width="5"/>',
-            // hand wear
-            _renderHandWear(number),
-            // head wear
-            _renderHeadWear(number),
-            // hands
-            _renderSkin(number)[2],
+            _renderSvgPart2(number),
             '</svg>'
         ));
 
@@ -113,36 +166,138 @@ contract CryptoIdol is ERC721, Ownable {
             // head
             _renderSkin(number)[0],
             // hair front
-            _renderHair(number)[1]
+            _renderHair(number)[1],
+            // eye
+            _renderEye(number)
         ));
     }
 
+    // extract lower elements to prevent stack too deep errors
+    function _renderSvgPart2(uint256 number) internal view returns (string memory) {
+        return string(abi.encodePacked(
+            // legs
+            _renderSkin(number)[1],
+            // dress
+            _renderDress(number),
+            // mouth
+            '<path d="M522.5 484C522.5 494.436 512.562 503.5 499.5 503.5C486.438 503.5 476.5 494.436 476.5 484C476.5 473.564 486.438 464.5 499.5 464.5C512.562 464.5 522.5 473.564 522.5 484Z" fill="#FF8181" stroke="black" stroke-width="5"/>',
+            // hand wear
+            _renderHandWear(number),
+            // head wear
+            _renderHeadWear(number),
+            // hands
+            _renderSkin(number)[2]
+        ));
+    }
+
+
     function _renderBg(uint256 number) internal view returns (string memory) {
         return string(abi.encodePacked(
-            '<rect width="1000" height="1000" fill="', bgPalette[uint8(number % 8)] ,'"/>'
+            '<rect width="1000" height="1000" fill="', bgPalette[uint8(number % 9)] ,'"/>'
         ));
     }
 
     function _renderHair(uint256 number) internal view returns (string[2] memory) {
-        string[3] memory hairBackOptions = [
-            string(abi.encodePacked('<path d="M244.5 725C226.5 695 265.333 564.833 287 503.5L712 514C711.2 534.8 759.5 614.5 767.5 675C767.5 700.6 753.5 719 746.5 725L722.5 682C734.5 739.6 698.5 763 679 767.5C696.2 747.9 686.167 727 679 719C681.8 739 665.833 759.667 657.5 767.5C582.7 793.1 428.333 778.167 360.5 767.5C342.5 759.9 324.667 732 318 719C314.4 743 324.167 761.333 329.5 767.5C273.5 774.3 269.833 713.333 275 682C265.4 693.2 250.667 715.333 244.5 725Z" stroke="black" stroke-width="10" fill="', bgPalette[uint8((number + 1) % 8)], '"/>')),
-            string(abi.encodePacked('<path d="M301.31 759.793L326.569 480H668.586L703.55 759.715L603.587 797.5H496.5H391.998L301.31 759.793Z" stroke="black" stroke-width="10" fill="', bgPalette[uint8((number + 1) % 8)], '"/>"')),
+        string[6] memory hairBackOptions = [
+            // Hair Messy
+            string(
+                abi.encodePacked(
+                    '<path d="M244.5 725C226.5 695 265.333 564.833 287 503.5L712 514C711.2 534.8 759.5 614.5 767.5 675C767.5 700.6 753.5 719 746.5 725L722.5 682C734.5 739.6 698.5 763 679 767.5C696.2 747.9 686.167 727 679 719C681.8 739 665.833 759.667 657.5 767.5C582.7 793.1 428.333 778.167 360.5 767.5C342.5 759.9 324.667 732 318 719C314.4 743 324.167 761.333 329.5 767.5C273.5 774.3 269.833 713.333 275 682C265.4 693.2 250.667 715.333 244.5 725Z" stroke="black" stroke-width="10" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '"/>'
+                )
+            ),
+            // Hair Tidy
+            string(
+                abi.encodePacked(
+                    '<path d="M301.31 759.793L326.569 480H668.586L703.55 759.715L603.587 797.5H496.5H391.998L301.31 759.793Z" stroke="black" stroke-width="10" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '"/>"'
+                )
+            ),
+            // Pony Tail Left
+            string(
+                abi.encodePacked(
+                    '<path d="M205 188.5C221.8 136.9 291.667 167 318.5 188.5L283 467.5C290.2 498.7 294 552.833 295 576C300 673 235 740 251 707.5C263.8 681.5 256.333 607.333 251 573.5C251 613.9 220.333 701.333 205 740C191.833 731.5 160.4 689.1 140 587.5C121.5 440 184 253 205 188.5Z" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '" stroke="black" stroke-width="10"/>'
+                )
+            ),
+            // Pony Tail Right
+            string(
+                abi.encodePacked(
+                    '<path d="M788.5 188.491C771.7 136.891 701.833 166.991 675 188.491L710.5 467.491C703.3 498.691 699.5 552.824 698.5 575.991C693.5 672.991 758.5 739.991 742.5 707.491C729.7 681.491 737.167 607.324 742.5 573.491C742.5 613.891 773.167 701.324 788.5 739.991C801.667 731.491 833.1 689.091 853.5 587.491C872 439.991 809.5 252.991 788.5 188.491Z" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '" stroke="black" stroke-width="10"/>'
+                )
+            ),
+            // Double Pony Tails
+            string(
+                abi.encodePacked(
+                    '<path d="M205 188.5C221.8 136.9 291.667 167 318.5 188.5L283 467.5C290.2 498.7 294 552.833 295 576C300 673 235 740 251 707.5C263.8 681.5 256.333 607.333 251 573.5C251 613.9 220.333 701.333 205 740C191.833 731.5 160.4 689.1 140 587.5C121.5 440 184 253 205 188.5Z" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '" stroke="black" stroke-width="10"/>'
+                    '<path d="M788.5 188.491C771.7 136.891 701.833 166.991 675 188.491L710.5 467.491C703.3 498.691 699.5 552.824 698.5 575.991C693.5 672.991 758.5 739.991 742.5 707.491C729.7 681.491 737.167 607.324 742.5 573.491C742.5 613.891 773.167 701.324 788.5 739.991C801.667 731.491 833.1 689.091 853.5 587.491C872 439.991 809.5 252.991 788.5 188.491Z" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '" stroke="black" stroke-width="10"/>'
+                )
+            ),
             ''
         ];
-        string[4] memory hairFrontOptions = [
+        string[6] memory hairFrontOptions = [
             // hime
-            string(abi.encodePacked('<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C655 516.5 650.5 403.5 650.5 371H343.075L351 314.388L366.5 260.5C313.3 392.1 348.833 530.667 371 590C275 502 245.009 452.5 261 302Z" fill="', bgPalette[uint8((number + 1) % 8)], '"/> <path d="M630.5 260.5C633.667 271.333 642.548 296 645 314.388C648.282 339 650.5 345 650.5 371M650.5 371C650.5 403.5 655 516.5 624.5 584C658.833 583.833 767 527.2 731 302C720 235.333 657.5 102 495.5 102C429 103.5 278 142 261 302C245.009 452.5 275 502 371 590C348.833 530.667 313.3 392.1 366.5 260.5L351 314.388L343.075 371H650.5Z" stroke="black" stroke-width="10"/>')),
+            string(
+                abi.encodePacked(
+                    '<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C655 516.5 650.5 403.5 650.5 371H343.075L351 314.388L366.5 260.5C313.3 392.1 348.833 530.667 371 590C275 502 245.009 452.5 261 302Z" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '"/> <path d="M630.5 260.5C633.667 271.333 642.548 296 645 314.388C648.282 339 650.5 345 650.5 371M650.5 371C650.5 403.5 655 516.5 624.5 584C658.833 583.833 767 527.2 731 302C720 235.333 657.5 102 495.5 102C429 103.5 278 142 261 302C245.009 452.5 275 502 371 590C348.833 530.667 313.3 392.1 366.5 260.5L351 314.388L343.075 371H650.5Z" stroke="black" stroke-width="10"/>'
+                )
+            ),
             // bang
-            string(abi.encodePacked('<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C657.837 528.308 649.835 377.057 638.199 306.137C639.466 322.674 629.392 360.534 630 376.5C594 360.5 587.833 287 582 255C567.2 354.6 489.833 380.167 453 380.5C460.6 377.7 484.5 347.667 495.5 333C473.9 357.8 418.5 368.667 393.5 371C434.961 333.4 456.442 293 462 277.5C442 314.7 371.741 355.333 343.075 371L351 314.388L366.5 260.5C313.3 392.1 348.833 530.667 371 590C275 502 245.009 452.5 261 302Z" fill="', bgPalette[uint8((number + 1) % 8)], '"/> <path d="M495.5 102C429 103.5 278 142 261 302C245.009 452.5 275 502 371 590C348.833 530.667 313.3 392.1 366.5 260.5L351 314.388L343.075 371C371.741 355.333 442 314.7 462 277.5C456.442 293 434.961 333.4 393.5 371C418.5 368.667 473.9 357.8 495.5 333C484.5 347.667 460.6 377.7 453 380.5C489.833 380.167 567.2 354.6 582 255C587.833 287 594 360.5 630 376.5C629.333 359 641.5 315.2 637.5 302C649.5 371 658.5 527.2 624.5 584C658.833 583.833 767 527.2 731 302C720 235.333 657.5 102 495.5 102Z" stroke="black" stroke-width="10"/>')),
+            string(
+                abi.encodePacked(
+                    '<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C657.837 528.308 649.835 377.057 638.199 306.137C639.466 322.674 629.392 360.534 630 376.5C594 360.5 587.833 287 582 255C567.2 354.6 489.833 380.167 453 380.5C460.6 377.7 484.5 347.667 495.5 333C473.9 357.8 418.5 368.667 393.5 371C434.961 333.4 456.442 293 462 277.5C442 314.7 371.741 355.333 343.075 371L351 314.388L366.5 260.5C313.3 392.1 348.833 530.667 371 590C275 502 245.009 452.5 261 302Z" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '"/> <path d="M495.5 102C429 103.5 278 142 261 302C245.009 452.5 275 502 371 590C348.833 530.667 313.3 392.1 366.5 260.5L351 314.388L343.075 371C371.741 355.333 442 314.7 462 277.5C456.442 293 434.961 333.4 393.5 371C418.5 368.667 473.9 357.8 495.5 333C484.5 347.667 460.6 377.7 453 380.5C489.833 380.167 567.2 354.6 582 255C587.833 287 594 360.5 630 376.5C629.333 359 641.5 315.2 637.5 302C649.5 371 658.5 527.2 624.5 584C658.833 583.833 767 527.2 731 302C720 235.333 657.5 102 495.5 102Z" stroke="black" stroke-width="10"/>'
+                )
+            ),
             // middle part
-            string(abi.encodePacked('<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C680.1 474 651.667 322.5 630.5 260.5C642.9 346.1 630.5 353.045 624.5 352.5C580.5 348.5 517.5 286.667 495.5 260.5C469.333 290.167 410.7 359.7 353.5 366.5C352.379 345.038 353.228 295.75 365.01 264.247C313.973 394.722 349.044 531.23 371 590C275 502 245.009 452.5 261 302Z" stroke="black" stroke-width="10" fill="', bgPalette[uint8((number + 1) % 8)], '"/>')),
+            string(
+                abi.encodePacked(
+                    '<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C680.1 474 651.667 322.5 630.5 260.5C642.9 346.1 630.5 353.045 624.5 352.5C580.5 348.5 517.5 286.667 495.5 260.5C469.333 290.167 410.7 359.7 353.5 366.5C352.379 345.038 353.228 295.75 365.01 264.247C313.973 394.722 349.044 531.23 371 590C275 502 245.009 452.5 261 302Z" stroke="black" stroke-width="10" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '"/>'
+                )
+            ),
             // side part
-            string(abi.encodePacked('<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C680.1 474 651.667 322.5 630.5 260.5C633.667 271.333 635.548 308.612 638 327C561.716 351.037 401.534 383.4 343.075 371L351 314.388L366.5 260.5C313.3 392.1 348.833 530.667 371 590C275 502 245.009 452.5 261 302Z" fill="', bgPalette[uint8((number + 1) % 8)], '" stroke="black" stroke-width="10"/>'))
+            string(
+                abi.encodePacked(
+                    '<path d="M261 302C278 142 429 103.5 495.5 102C657.5 102 720 235.333 731 302C767 527.2 658.833 583.833 624.5 584C680.1 474 651.667 322.5 630.5 260.5C633.667 271.333 635.548 308.612 638 327C561.716 351.037 401.534 383.4 343.075 371L351 314.388L366.5 260.5C313.3 392.1 348.833 530.667 371 590C275 502 245.009 452.5 261 302Z" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '" stroke="black" stroke-width="10"/>'
+                )
+            ),
+            // curly
+            string(
+                abi.encodePacked(
+                    '<path d="M287.5 620C278 447.5 245 429.5 253 291C253 199 326 95 490.5 95C671 95 714 181.5 735.5 291C750.5 433.5 689 540.5 704 620C663.6 580.8 631.333 306.667 628.5 265L613.5 350C585.1 334.8 574 339 557.5 265V339C533.5 315.8 519.167 283.667 515 265C501.8 333 466 333.5 434 339C472.4 311.8 453.167 287.5 454.5 265C434 339 394.333 324.333 372.5 339C372.5 284 364 257 364 265C349 453 287.5 620 287.5 620Z" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '" stroke="black" stroke-width="10"/>'
+                )
+            ),
+            // bang cover eye
+            string(
+                abi.encodePacked(
+                    '<path d="M615 477.5C528.2 420.7 457.167 296.5 432.5 241.5C432.5 300.7 462.833 381.5 478 414.5C427.433 389.051 386.127 318.156 364.182 269C306.182 347.8 353 498 368.5 587C248 484 253 399.5 254.5 328C256 256.5 313.5 100.5 508 102C663.6 103.2 725.5 253.167 737 328C755.8 503.6 671.833 573.833 627.5 587C662.7 499 649.5 343 638.5 276C648.5 379.2 627 453.333 615 477.5Z" fill="',
+                    bgPalette[uint8((number + 1) % 9)],
+                    '" stroke="black" stroke-width="10"/>'
+                )
+            )
         ];
 
         return [
-            hairBackOptions[uint8((number + 1) % 3)],
-            hairFrontOptions[uint8(number + 2) % 4]
+            hairBackOptions[uint8((number + 1) % 6)],
+            hairFrontOptions[uint8(number + 2) % 6]
         ];
     }
 
@@ -150,19 +305,33 @@ contract CryptoIdol is ERC721, Ownable {
         string memory skinColor = skinPalette[uint8(number % 3)];
         return [
             // head
-            string(abi.encodePacked(
-                '<path d="M730 381C730 426.209 704.612 467.59 662.659 497.861C620.712 528.126 562.513 547 498 547C433.487 547 375.288 528.126 333.341 497.861C291.388 467.59 266 426.209 266 381C266 335.791 291.388 294.41 333.341 264.139C375.288 233.874 433.487 215 498 215C562.513 215 620.712 233.874 662.659 264.139C704.612 294.41 730 335.791 730 381Z" stroke="black" stroke-width="10" fill="',
-                skinColor
-                ,'"/>'
-            )),
+            string(
+                abi.encodePacked(
+                    '<path d="M730 381C730 426.209 704.612 467.59 662.659 497.861C620.712 528.126 562.513 547 498 547C433.487 547 375.288 528.126 333.341 497.861C291.388 467.59 266 426.209 266 381C266 335.791 291.388 294.41 333.341 264.139C375.288 233.874 433.487 215 498 215C562.513 215 620.712 233.874 662.659 264.139C704.612 294.41 730 335.791 730 381Z" stroke="black" stroke-width="10" fill="',
+                    skinColor
+                    ,'"/>'
+                )
+            ),
             // legs
-            string(abi.encodePacked(
-                '<path d="M493 836.5C493 862.099 488.653 885.039 481.818 901.393C478.395 909.581 474.447 915.882 470.319 920.059C466.208 924.219 462.218 926 458.5 926C454.782 926 450.792 924.219 446.681 920.059C442.553 915.882 438.605 909.581 435.182 901.393C428.347 885.039 424 862.099 424 836.5C424 810.901 428.347 787.961 435.182 771.607C438.605 763.419 442.553 757.118 446.681 752.941C450.792 748.781 454.782 747 458.5 747C462.218 747 466.208 748.781 470.319 752.941C474.447 757.118 478.395 763.419 481.818 771.607C488.653 787.961 493 810.901 493 836.5Z" stroke="black" stroke-width="10" fill="', skinColor,'"/> <path d="M586 836.5C586 862.099 581.653 885.039 574.818 901.393C571.395 909.581 567.447 915.882 563.319 920.059C559.208 924.219 555.218 926 551.5 926C547.782 926 543.792 924.219 539.681 920.059C535.553 915.882 531.605 909.581 528.182 901.393C521.347 885.039 517 862.099 517 836.5C517 810.901 521.347 787.961 528.182 771.607C531.605 763.419 535.553 757.118 539.681 752.941C543.792 748.781 547.782 747 551.5 747C555.218 747 559.208 748.781 563.319 752.941C567.447 757.118 571.395 763.419 574.818 771.607C581.653 787.961 586 810.901 586 836.5Z" stroke="black" stroke-width="10" fill="', skinColor,'"/>'
-            )),
+            string(
+                abi.encodePacked(
+                    '<path d="M493 836.5C493 862.099 488.653 885.039 481.818 901.393C478.395 909.581 474.447 915.882 470.319 920.059C466.208 924.219 462.218 926 458.5 926C454.782 926 450.792 924.219 446.681 920.059C442.553 915.882 438.605 909.581 435.182 901.393C428.347 885.039 424 862.099 424 836.5C424 810.901 428.347 787.961 435.182 771.607C438.605 763.419 442.553 757.118 446.681 752.941C450.792 748.781 454.782 747 458.5 747C462.218 747 466.208 748.781 470.319 752.941C474.447 757.118 478.395 763.419 481.818 771.607C488.653 787.961 493 810.901 493 836.5Z" stroke="black" stroke-width="10" fill="',
+                    skinColor,
+                    '"/> <path d="M586 836.5C586 862.099 581.653 885.039 574.818 901.393C571.395 909.581 567.447 915.882 563.319 920.059C559.208 924.219 555.218 926 551.5 926C547.782 926 543.792 924.219 539.681 920.059C535.553 915.882 531.605 909.581 528.182 901.393C521.347 885.039 517 862.099 517 836.5C517 810.901 521.347 787.961 528.182 771.607C531.605 763.419 535.553 757.118 539.681 752.941C543.792 748.781 547.782 747 551.5 747C555.218 747 559.208 748.781 563.319 752.941C567.447 757.118 571.395 763.419 574.818 771.607C581.653 787.961 586 810.901 586 836.5Z" stroke="black" stroke-width="10" fill="',
+                    skinColor,
+                    '"/>'
+                )
+            ),
             // hands
-            string(abi.encodePacked(
-                '<path d="M520 623.5C520 642.907 507.086 657 493 657C478.914 657 466 642.907 466 623.5C466 604.093 478.914 590 493 590C507.086 590 520 604.093 520 623.5Z" stroke="black" stroke-width="10" fill="', skinColor, '"/> <path d="M678 729C678 745.623 666.237 758 653 758C639.763 758 628 745.623 628 729C628 712.377 639.763 700 653 700C666.237 700 678 712.377 678 729Z" stroke="black" stroke-width="10" fill="', skinColor, '"/>'
-            ))
+            string(
+                abi.encodePacked(
+                    '<path d="M520 623.5C520 642.907 507.086 657 493 657C478.914 657 466 642.907 466 623.5C466 604.093 478.914 590 493 590C507.086 590 520 604.093 520 623.5Z" stroke="black" stroke-width="10" fill="',
+                    skinColor,
+                    '"/> <path d="M678 729C678 745.623 666.237 758 653 758C639.763 758 628 745.623 628 729C628 712.377 639.763 700 653 700C666.237 700 678 712.377 678 729Z" stroke="black" stroke-width="10" fill="',
+                    skinColor,
+                    '"/>'
+                )
+            )
         ];
     }
 
@@ -191,15 +360,20 @@ contract CryptoIdol is ERC721, Ownable {
 
     function _renderDress(uint256 number) internal view returns (string memory) {
         return string(abi.encodePacked(
-            '<path d="M353.5 784.5C368.7 758.1 423.5 614.167 449 545.5H554.5L647 784.5C527.8 849.7 401.667 811.667 353.5 784.5Z" fill="', bgPalette[uint8((number + 5) % 8)], '" stroke="black" stroke-width="10"/>',
-            '<path d="M385.5 671.5C373.5 637.1 418.167 580.5 442.5 553L436.75 615L468 598.5C460.4 615.7 471.167 646.667 477.5 660L412.5 692C399.5 694.5 389 676.5 385.5 671.5Z" fill="', bgPalette[uint8((number + 7) % 8)], '"/>',
-            '<path d="M656.5 692L554.5 546L567.5 660L622 731L656.5 692Z" fill="',  bgPalette[uint8((number + 7) % 8)], '"/>',
+            '<path d="M353.5 784.5C368.7 758.1 423.5 614.167 449 545.5H554.5L647 784.5C527.8 849.7 401.667 811.667 353.5 784.5Z" fill="',
+            bgPalette[uint8((number + 5) % 9)],
+            '" stroke="black" stroke-width="10"/>',
+            '<path d="M385.5 671.5C373.5 637.1 418.167 580.5 442.5 553L436.75 615L468 598.5C460.4 615.7 471.167 646.667 477.5 660L412.5 692C399.5 694.5 389 676.5 385.5 671.5Z" fill="',
+            bgPalette[uint8((number + 7) % 9)],
+            '"/>',
+            '<path d="M656.5 692L554.5 546L567.5 660L622 731L656.5 692Z" fill="',
+            bgPalette[uint8((number + 7) % 9)], '"/>',
             '<path d="M405.5 631.5L436.75 615M436.75 615L468 598.5C460.4 615.7 471.167 646.667 477.5 660L412.5 692C399.5 694.5 389 676.5 385.5 671.5C373.5 637.1 418.167 580.5 442.5 553L436.75 615ZM554.5 546L656.5 692L622 731L567.5 660L554.5 546Z" stroke="black" stroke-width="10"/>'
         ));
     }
 
     function _renderHandWear(uint256 number) internal pure returns (string memory) {
-        string[7] memory handWearOptions = [
+        string[8] memory handWearOptions = [
             // mic
             '<path d="M547 552C547 577.739 525.062 599 497.5 599C469.938 599 448 577.739 448 552C448 526.261 469.938 505 497.5 505C525.062 505 547 526.261 547 552Z" fill="#868686" stroke="black" stroke-width="10"/> <rect x="477" y="595" width="41" height="95" fill="#D9D9D9" stroke="black" stroke-width="10"/>',
             // ice cream choco
@@ -212,11 +386,13 @@ contract CryptoIdol is ERC721, Ownable {
             '<line x1="481.593" y1="688.029" x2="509.212" y2="474.19" stroke="black" stroke-width="10"/> <path d="M526.936 539.097C525.213 551.538 520.688 562.218 514.946 569.441C509.149 576.735 502.589 579.996 496.652 579.174C490.714 578.352 485.288 573.43 481.691 564.836C478.129 556.324 476.676 544.816 478.399 532.375C480.122 519.934 484.648 509.254 490.389 502.031C496.187 494.738 502.746 491.476 508.683 492.298C514.621 493.12 520.047 498.042 523.644 506.637C527.206 515.148 528.659 526.656 526.936 539.097Z" fill="#BB4F00" stroke="black" stroke-width="7"/>',
             // magic wand
             '<rect x="452" y="513.07" width="20.9389" height="201" transform="rotate(-19.7339 452 513.07)" fill="black"/> <rect x="455.197" y="514.579" width="15.9389" height="34" transform="rotate(-19.7339 455.197 514.579)" fill="white" stroke="black" stroke-width="5"/> <rect x="509.897" y="667.065" width="15.9389" height="34" transform="rotate(-19.7339 509.897 667.065)" fill="white" stroke="black" stroke-width="5"/>',
+            // knife,
+            '<path d="M466 695.067L472.581 668.881L491.716 592.749L513.053 598.112L487.336 700.43L466 695.067Z" fill="black" stroke="black" stroke-width="10"/> <path d="M561.685 498.976L530.108 440L515.361 498.675L491.716 592.749L535.359 603.718L561.685 498.976Z" fill="#D6CBCB" stroke="black" stroke-width="10"/> <path d="M537 532.5C527.4 521.7 533 488.667 537 473.5C544.6 466.7 556.833 487.333 562 498.5L551.5 541.5L541.756 586.812C541.833 587.366 541.767 587.76 541.5 588L541.756 586.812C541.35 583.906 537 576.598 537 564C537 554.038 549 546 537 532.5Z" fill="#FF1414" stroke="black" stroke-width="5"/>',
             // empty
             ''
         ];
 
-        return handWearOptions[uint8(number % 7)];
+        return handWearOptions[uint8(number % 8)];
     }
 
     function _renderHeadWear(uint256 number) internal view returns (string memory) {
@@ -224,13 +400,21 @@ contract CryptoIdol is ERC721, Ownable {
             // none
             '',
             // cap
-            string(abi.encodePacked('<path d="M329.5 188C292.7 92.8 381.167 43 430 30C549.6 1.99999 592.5 84.6667 599 129.5L329.5 188Z" fill="',  bgPalette[uint8((number + 2) % 8)],'" stroke="black" stroke-width="10"/> <path d="M217.5 233L329.5 189L323.5 172.5L217.5 233Z" fill="', bgPalette[uint8((number + 2) % 8)], '" stroke="black" stroke-width="10"/>')),
+            string(
+                abi.encodePacked(
+                    '<path d="M329.5 188C292.7 92.8 381.167 43 430 30C549.6 1.99999 592.5 84.6667 599 129.5L329.5 188Z" fill="',
+                    bgPalette[uint8((number + 2) % 9)],
+                    '" stroke="black" stroke-width="10"/> <path d="M217.5 233L329.5 189L323.5 172.5L217.5 233Z" fill="',
+                    bgPalette[uint8((number + 2) % 9)],
+                    '" stroke="black" stroke-width="10"/>'
+                )
+            ),
             // cat ear
             '<path d="M292.5 207.5C269.3 169.5 275.167 108.833 281.5 87.5C305.9 87.5 359.5 114.333 373.5 133C331.5 158 317.5 175 292.5 207.5Z" fill="white" stroke="black" stroke-width="10"/> <path d="M306 182C294.4 169.6 292.833 132.5 293.5 115.5C299.5 100.3 334 126.833 350.5 142C334.9 152 314.333 172.833 306 182Z" fill="#FFBCBC"/> <path d="M692.331 208.534C716.779 171.325 712.928 110.497 707.305 88.965C682.919 88.1556 628.459 113.196 613.848 131.388C654.995 157.768 668.423 175.223 692.331 208.534Z" fill="white" stroke="black" stroke-width="10"/> <path d="M679.685 182.6C691.689 170.592 694.486 133.564 694.383 116.552C688.891 101.161 653.53 126.535 636.536 141.146C651.796 151.658 671.66 173.162 679.685 182.6Z" fill="#FFBCBC"/>',
             // bunny ear
             '<path d="M323.5 29C264.3 73.4 309.833 172.5 340 216.5L388 194.5C402.8 34.1 351.167 17.3333 323.5 29Z" fill="white" stroke="black" stroke-width="10"/> <path d="M334.5 64C309.3 87.6 329.833 170 346.5 208L379 193.5C374.167 139.5 359.7 40.4 334.5 64Z" fill="#FFBCBC"/> <path d="M587 198C584 159.333 585.7 78.7 616.5 65.5C655 49 703 106 703 122.5C698.924 156.656 682.732 202.336 648.486 157.5C648.486 176.7 623.495 205.5 616.5 211L587 198Z" fill="white"/> <path d="M648.486 157.5C682.732 202.336 698.924 156.656 703 122.5C703 106 655 49 616.5 65.5C585.7 78.7 584 159.333 587 198L616.5 211C623.495 205.5 648.486 176.7 648.486 157.5ZM648.486 157.5C642.126 149.173 632.144 127.224 624.5 112L648.486 157.5Z" stroke="black" stroke-width="10"/> <path d="M593.5 195.5C591.5 194.7 610.167 134 620.5 115L641.5 156.5L614 204.5C605.5 200.5 606 200.5 593.5 195.5Z" fill="#FFBCBC"/>',
             // ribbon
-            string(abi.encodePacked('<path d="M258.5 162C258.5 137.2 299.833 143 320.5 149L335.5 162V180C327.5 204.8 310.167 220 302.5 224.5C287.833 214 258.5 186.8 258.5 162Z" fill="', bgPalette[uint8((number + 2) % 8)], '" stroke="black" stroke-width="10"/> <path d="M418 129.301C418 152.038 379.887 146.72 360.831 141.219L347 129.301V112.798C354.377 90.0612 370.359 76.1257 377.429 72C390.952 81.6265 418 106.564 418 129.301Z" fill="', bgPalette[uint8((number + 2) % 8)],'" stroke="black" stroke-width="10"/> <path d="M363 146.5C363 156.819 354.84 165 345 165C335.16 165 327 156.819 327 146.5C327 136.181 335.16 128 345 128C354.84 128 363 136.181 363 146.5Z" fill="', bgPalette[uint8((number + 2) % 8)],'" stroke="black" stroke-width="10"/>')),
+            string(abi.encodePacked('<path d="M258.5 162C258.5 137.2 299.833 143 320.5 149L335.5 162V180C327.5 204.8 310.167 220 302.5 224.5C287.833 214 258.5 186.8 258.5 162Z" fill="', bgPalette[uint8((number + 2) % 8)], '" stroke="black" stroke-width="10"/> <path d="M418 129.301C418 152.038 379.887 146.72 360.831 141.219L347 129.301V112.798C354.377 90.0612 370.359 76.1257 377.429 72C390.952 81.6265 418 106.564 418 129.301Z" fill="', bgPalette[uint8((number + 2) % 9)],'" stroke="black" stroke-width="10"/> <path d="M363 146.5C363 156.819 354.84 165 345 165C335.16 165 327 156.819 327 146.5C327 136.181 335.16 128 345 128C354.84 128 363 136.181 363 146.5Z" fill="', bgPalette[uint8((number + 2) % 8)],'" stroke="black" stroke-width="10"/>')),
             // devil horn
             '<path d="M323.157 169.21L316.146 119.382L361.456 141.268L323.157 169.21Z" fill="#FF0000" stroke="black" stroke-width="10"/> <path d="M621.098 136.698L666.859 115.772L658.8 165.441L621.098 136.698Z" fill="#FF0000" stroke="black" stroke-width="10"/>',
             // halo
@@ -238,7 +422,7 @@ contract CryptoIdol is ERC721, Ownable {
             // cowbow hat
             '<path d="M246.298 219C240.298 96.6 326.464 85.6666 370.298 95.5C370.298 82 371.998 50.9 378.798 34.5C385.598 18.1 437.964 12 463.298 11C549.698 11.8 593.964 32 605.298 42L611.298 136C651.298 133.2 713.631 156.167 739.798 168C690.998 168 542.464 224.333 474.298 252.5C446.453 267.59 407.845 284.006 370.298 291.922C308.734 304.901 250.025 295.03 246.298 219Z" fill="#6C4141"/> <path d="M370.298 95.5C326.464 85.6667 240.298 96.6 246.298 219C252.298 341.4 400.798 292.333 474.298 252.5C542.464 224.333 690.998 168 739.798 168M370.298 95.5C370.298 82 371.998 50.9 378.798 34.5C385.598 18.1 437.964 12 463.298 11C549.698 11.8 593.964 32 605.298 42L611.298 136M370.298 95.5V168C403.631 182.667 483.798 207.6 537.798 190C550.131 186.333 580.898 176.8 605.298 168L611.298 136M739.798 168C713.631 156.167 651.298 133.2 611.298 136M739.798 168C636.998 127.2 447.798 236.589 370.298 291.922" stroke="black" stroke-width="10"/>',
             // party hat
-            string(abi.encodePacked('<path d="M309.5 213L285 43L407.5 154.5C396.7 190.9 337.667 208.667 309.5 213Z" fill="', bgPalette[uint8((number + 2) % 8)],'" stroke="black" stroke-width="10"/>'))
+            string(abi.encodePacked('<path d="M309.5 213L285 43L407.5 154.5C396.7 190.9 337.667 208.667 309.5 213Z" fill="', bgPalette[uint8((number + 2) % 9)],'" stroke="black" stroke-width="10"/>'))
         ];
 
         return headWearOptions[uint8(number % 9)];
@@ -248,7 +432,35 @@ contract CryptoIdol is ERC721, Ownable {
         verifier = IVerifier(verifier_);
     }
 
-    function mint(bytes calldata proof, uint256[] calldata instances) external {
+    function commitResult(bytes32 resultHash) external {
+        if (commits[resultHash].commitTime > 0) {
+            revert COMMIT_ALREADY_EXISTS();
+        } else {
+            commits[resultHash] = Commit(
+                msg.sender,
+                uint64(block.timestamp % 2**64),
+                0
+            );
+        }
+    }
+
+    function mint(bytes calldata proof, uint256[] calldata instances) external payable {
+        if (msg.value < mintPrice) {
+            revert CHEAPSKATE();
+        }
+
+        Commit storage c = commits[keccak256(abi.encode(proof, instances))];
+
+        if (c.committer != msg.sender) {
+            revert NOT_COMMITTER();
+        }
+
+        if (c.revealTime > 0) {
+            revert ALREADY_REVEALED();
+        } else {
+            c.revealTime = uint64(block.timestamp % 2**64);
+        }
+
         ++tokenCount;
 
         if (tokenCount > maxTokenCount) {
@@ -264,5 +476,10 @@ contract CryptoIdol is ERC721, Ownable {
         mintTime[tokenCount] = block.timestamp;
 
         _safeMint(msg.sender, tokenCount);
+    }
+
+    function withdraw() external onlyOwner {
+        (bool sent, _) = owner().call{value: address(this).balance}("");
+        require(sent, "Failed to send Ether");
     }
 }
