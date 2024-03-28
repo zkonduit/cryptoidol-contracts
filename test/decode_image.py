@@ -3,7 +3,7 @@ import base64
 import json
 
 
-for file in glob('metadata*'):
+for file in glob('metadata/*'):
     try:
         print(f"Decoding {file}...")
 

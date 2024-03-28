@@ -6,13 +6,6 @@ import {Ownable} from "solady/auth/Ownable.sol";
 import {Base64} from "solady/utils/Base64.sol";
 import {IVerifier} from "./IVerifier.sol";
 
-error COMMIT_ALREADY_EXISTS();
-error NOT_COMMITTER();
-error ALREADY_REVEALED();
-error CHEAPSKATE();
-error MINTED_OUT();
-error VERIFICATION_FAILED();
-
 /**
  * @notice CryptoIdol NFT Contract, Sing to Mint a CryptoIdol!
  * @author jseam
@@ -62,10 +55,18 @@ error VERIFICATION_FAILED();
  *                              ~~~~        ~~~
  */
 contract CryptoIdol is ERC721, Ownable {
+    // ERRORS
+    error COMMIT_ALREADY_EXISTS();
+    error NOT_COMMITTER();
+    error ALREADY_REVEALED();
+    error CHEAPSKATE();
+    error MINTED_OUT();
+    error VERIFICATION_FAILED();
+
     IVerifier public verifier;
     uint256 public tokenCount;
     uint256 public maxTokenCount = 10_000;
-    uint256 public mintPrice;
+    uint256 public mintPrice = 0.01 ether;
 
     struct Commit {
         address committer;
@@ -73,26 +74,22 @@ contract CryptoIdol is ERC721, Ownable {
         uint64 revealTime;
     }
 
-    mapping (bytes32 => Commit) commits;
-    mapping (uint256 => uint256) score;
-    mapping (uint256 => address) minter;
-    mapping (uint256 => uint256) mintTime;
-    mapping (uint8 => string) bgPalette;
-    mapping (uint8 => string) skinPalette;
+    mapping (bytes32 => Commit) public commits;
+    mapping (uint256 => uint256) public score;
+    mapping (uint256 => address) public minter;
+    mapping (uint256 => uint256) public mintTime;
+    mapping (uint8 => string) public bgPalette;
+    mapping (uint8 => string) public skinPalette;
 
     /// @notice constructor to initialize contract
     /// @param owner_ owner address that has control over the contract
     /// @param verifier_ ezkl verifier used in the contract
-    /// @param mintPrice_ cost in wei (10^18 wei == 1 ether)
     constructor(
         address owner_,
-        address verifier_,
-        uint256 mintPrice_
+        address verifier_
     ) {
         _initializeOwner(owner_);
         verifier = IVerifier(verifier_);
-        mintPrice = mintPrice_;
-
 
         // initialize bgPalette
         // yellow
@@ -137,7 +134,7 @@ contract CryptoIdol is ERC721, Ownable {
             revert TokenDoesNotExist();
         }
 
-        uint256 number = id;
+        uint256 number = id + score[id];
 
         string memory image = string(abi.encodePacked(
             '<svg width="1000" height="1000" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg">',
@@ -165,10 +162,10 @@ contract CryptoIdol is ERC721, Ownable {
             _renderHair(number)[0],
             // head
             _renderSkin(number)[0],
-            // hair front
-            _renderHair(number)[1],
             // eye
-            _renderEye(number)
+            _renderEye(number),
+            // hair front
+            _renderHair(number)[1]
         ));
     }
 
@@ -414,7 +411,7 @@ contract CryptoIdol is ERC721, Ownable {
             // bunny ear
             '<path d="M323.5 29C264.3 73.4 309.833 172.5 340 216.5L388 194.5C402.8 34.1 351.167 17.3333 323.5 29Z" fill="white" stroke="black" stroke-width="10"/> <path d="M334.5 64C309.3 87.6 329.833 170 346.5 208L379 193.5C374.167 139.5 359.7 40.4 334.5 64Z" fill="#FFBCBC"/> <path d="M587 198C584 159.333 585.7 78.7 616.5 65.5C655 49 703 106 703 122.5C698.924 156.656 682.732 202.336 648.486 157.5C648.486 176.7 623.495 205.5 616.5 211L587 198Z" fill="white"/> <path d="M648.486 157.5C682.732 202.336 698.924 156.656 703 122.5C703 106 655 49 616.5 65.5C585.7 78.7 584 159.333 587 198L616.5 211C623.495 205.5 648.486 176.7 648.486 157.5ZM648.486 157.5C642.126 149.173 632.144 127.224 624.5 112L648.486 157.5Z" stroke="black" stroke-width="10"/> <path d="M593.5 195.5C591.5 194.7 610.167 134 620.5 115L641.5 156.5L614 204.5C605.5 200.5 606 200.5 593.5 195.5Z" fill="#FFBCBC"/>',
             // ribbon
-            string(abi.encodePacked('<path d="M258.5 162C258.5 137.2 299.833 143 320.5 149L335.5 162V180C327.5 204.8 310.167 220 302.5 224.5C287.833 214 258.5 186.8 258.5 162Z" fill="', bgPalette[uint8((number + 2) % 8)], '" stroke="black" stroke-width="10"/> <path d="M418 129.301C418 152.038 379.887 146.72 360.831 141.219L347 129.301V112.798C354.377 90.0612 370.359 76.1257 377.429 72C390.952 81.6265 418 106.564 418 129.301Z" fill="', bgPalette[uint8((number + 2) % 9)],'" stroke="black" stroke-width="10"/> <path d="M363 146.5C363 156.819 354.84 165 345 165C335.16 165 327 156.819 327 146.5C327 136.181 335.16 128 345 128C354.84 128 363 136.181 363 146.5Z" fill="', bgPalette[uint8((number + 2) % 8)],'" stroke="black" stroke-width="10"/>')),
+            string(abi.encodePacked('<path d="M258.5 162C258.5 137.2 299.833 143 320.5 149L335.5 162V180C327.5 204.8 310.167 220 302.5 224.5C287.833 214 258.5 186.8 258.5 162Z" fill="', bgPalette[uint8((number + 2) % 9)], '" stroke="black" stroke-width="10"/> <path d="M418 129.301C418 152.038 379.887 146.72 360.831 141.219L347 129.301V112.798C354.377 90.0612 370.359 76.1257 377.429 72C390.952 81.6265 418 106.564 418 129.301Z" fill="', bgPalette[uint8((number + 2) % 9)],'" stroke="black" stroke-width="10"/> <path d="M363 146.5C363 156.819 354.84 165 345 165C335.16 165 327 156.819 327 146.5C327 136.181 335.16 128 345 128C354.84 128 363 136.181 363 146.5Z" fill="', bgPalette[uint8((number + 2) % 8)],'" stroke="black" stroke-width="10"/>')),
             // devil horn
             '<path d="M323.157 169.21L316.146 119.382L361.456 141.268L323.157 169.21Z" fill="#FF0000" stroke="black" stroke-width="10"/> <path d="M621.098 136.698L666.859 115.772L658.8 165.441L621.098 136.698Z" fill="#FF0000" stroke="black" stroke-width="10"/>',
             // halo
@@ -471,7 +468,7 @@ contract CryptoIdol is ERC721, Ownable {
             revert VERIFICATION_FAILED();
         }
 
-        score[tokenCount] = instances[1];
+        score[tokenCount] = instances[0];
         minter[tokenCount] = msg.sender;
         mintTime[tokenCount] = block.timestamp;
 
@@ -479,7 +476,7 @@ contract CryptoIdol is ERC721, Ownable {
     }
 
     function withdraw() external onlyOwner {
-        (bool sent, _) = owner().call{value: address(this).balance}("");
+        (bool sent, ) = owner().call{value: address(this).balance}("");
         require(sent, "Failed to send Ether");
     }
 }
