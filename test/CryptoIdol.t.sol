@@ -3,12 +3,14 @@ pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {CryptoIdol} from "../src/CryptoIdol.sol";
+import {CryptoIdolArt} from "../src/CryptoIdolArt.sol";
+import {CryptoIdolArtExtra} from "../src/CryptoIdolArtExtra.sol";
 import {Halo2Verifier} from "../src/Halo2Verifier.sol";
 import {LibString} from "lib/solady/src/utils/LibString.sol";
 
 contract CryptoIdolHarness is CryptoIdol {
-    constructor (address owner_, address verifier_)
-        CryptoIdol(owner_, verifier_)
+    constructor (address owner_, address verifier_, address cryptoIdolArt_)
+        CryptoIdol(owner_, verifier_, cryptoIdolArt_)
     {
         maxTokenCount = 1_000;
 
@@ -43,10 +45,14 @@ contract CryptoIdolTest is Test, ERC721TokenReceiver {
 
     CryptoIdolHarness public ci;
     Halo2Verifier public civ;
+    CryptoIdolArt public cia;
+    CryptoIdolArtExtra public ciae;
 
     function setUp() public {
         civ = new Halo2Verifier();
-        ci = new CryptoIdolHarness(address(this), address(civ));
+        ciae = new CryptoIdolArtExtra();
+        cia = new CryptoIdolArt(address(ciae));
+        ci = new CryptoIdolHarness(address(this), address(civ), address(cia));
     }
 
     receive() payable external {
