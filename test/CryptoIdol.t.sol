@@ -82,6 +82,16 @@ contract CryptoIdolTest is Test, ERC721TokenReceiver {
         ci.updateVerifier(address(newCiv));
     }
 
+    function testRenounceOwnership() public {
+        ci.renounceOwnership();
+        assertEq(ci.owner(), address(0));
+    }
+
+    function testChangeOwnership() public {
+        ci.transferOwnership(address(1));
+        assertEq(ci.owner(), address(1));
+    }
+
     function testMint() public {
         string[] memory input_proof = new string[](3);
         input_proof[0] = "echo";
