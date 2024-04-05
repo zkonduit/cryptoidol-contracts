@@ -92,7 +92,7 @@ contract CryptoIdolArt {
     }
 
     function tokenURI(uint256 id, uint256 score) public view returns (string memory) {
-        uint256 number = id + score;
+        uint256 number = id + score + block.timestamp;
 
         string memory image = string(abi.encodePacked(
             '<svg width="1000" height="1000" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg">',
@@ -113,41 +113,35 @@ contract CryptoIdolArt {
 
     // extract some elements to prevent stack too deep errors
     function _renderSvgPart1(uint256 number) public view returns (string memory) {
-        uint256 number2 = (number * 13 + number) % 10;
-        uint256 number3 = (number * 37 + number) % 10;
-
         return string(abi.encodePacked(
             // bg
             _renderBg(number),
             // hair back
-            cryptoIdolArtExtra._renderHair(number2)[0],
+            cryptoIdolArtExtra._renderHair(number)[0],
             // head
-            _renderSkin(number3)[0],
+            _renderSkin(number)[0],
             // eye
-            _renderEye(number3),
+            _renderEye(number),
             // hair front
-            cryptoIdolArtExtra._renderHair(number2)[1]
+            cryptoIdolArtExtra._renderHair(number)[1]
         ));
     }
 
     // extract lower elements to prevent stack too deep errors
     function _renderSvgPart2(uint256 number) public view returns (string memory) {
-        uint256 number2 = (number * 13 + number) % 10;
-        uint256 number3 = (number * 37 + number) % 10;
-
         return string(abi.encodePacked(
             // legs
-            _renderSkin(number3)[1],
+            _renderSkin(number)[1],
             // dress
             _renderDress(number),
             // mouth
             '<path d="M522.5 484C522.5 494.436 512.562 503.5 499.5 503.5C486.438 503.5 476.5 494.436 476.5 484C476.5 473.564 486.438 464.5 499.5 464.5C512.562 464.5 522.5 473.564 522.5 484Z" fill="#FF8181" stroke="black" stroke-width="5"/>',
             // hand wear
-            _renderHandWear(number2),
+            _renderHandWear(number),
             // head wear
-            _renderHeadWear(number3),
+            _renderHeadWear(number),
             // hands
-            _renderSkin(number3)[2]
+            _renderSkin(number)[2]
         ));
     }
 
@@ -219,13 +213,13 @@ contract CryptoIdolArt {
     function _renderDress(uint256 number) public view returns (string memory) {
         return string(abi.encodePacked(
             '<path d="M353.5 784.5C368.7 758.1 423.5 614.167 449 545.5H554.5L647 784.5C527.8 849.7 401.667 811.667 353.5 784.5Z" fill="',
-            bgPalette[uint8((number + 5) % 9)],
+            bgPalette[uint8(number / 9 % 9)],
             '" stroke="black" stroke-width="10"/>',
             '<path d="M385.5 671.5C373.5 637.1 418.167 580.5 442.5 553L436.75 615L468 598.5C460.4 615.7 471.167 646.667 477.5 660L412.5 692C399.5 694.5 389 676.5 385.5 671.5Z" fill="',
-            bgPalette[uint8((number + 7) % 9)],
+            bgPalette[uint8((number / 81 + 1) % 9)],
             '"/>',
             '<path d="M656.5 692L554.5 546L567.5 660L622 731L656.5 692Z" fill="',
-            bgPalette[uint8((number + 7) % 9)], '"/>',
+            bgPalette[uint8((number / 81 + 1) % 9)], '"/>',
             '<path d="M405.5 631.5L436.75 615M436.75 615L468 598.5C460.4 615.7 471.167 646.667 477.5 660L412.5 692C399.5 694.5 389 676.5 385.5 671.5C373.5 637.1 418.167 580.5 442.5 553L436.75 615ZM554.5 546L656.5 692L622 731L567.5 660L554.5 546Z" stroke="black" stroke-width="10"/>'
         ));
     }
@@ -250,7 +244,7 @@ contract CryptoIdolArt {
             ''
         ];
 
-        return handWearOptions[uint8(number % 8)];
+        return handWearOptions[uint8(number / 64 % 8)];
     }
 
     function _renderHeadWear(uint256 number) public view returns (string memory) {
@@ -283,6 +277,6 @@ contract CryptoIdolArt {
             string(abi.encodePacked('<path d="M309.5 213L285 43L407.5 154.5C396.7 190.9 337.667 208.667 309.5 213Z" fill="', bgPalette[uint8((number + 2) % 9)],'" stroke="black" stroke-width="10"/>'))
         ];
 
-        return headWearOptions[uint8(number % 9)];
+        return headWearOptions[uint8(number / 729 % 9)];
     }
 }
