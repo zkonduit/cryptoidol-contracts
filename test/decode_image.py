@@ -12,6 +12,7 @@ for file in glob('metadata/*'):
             data_parse = data.replace("data:application/json;base64,", "")
             json_data = base64.b64decode(data_parse)
             json_data = json.loads(json_data)
+            print(json_data["attributes"])
             image_string = json_data["image"]
             svg_data = image_string.replace("data:image/svg+xml;base64,", "")
             svg_parse = base64.b64decode(svg_data)

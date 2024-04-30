@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Base64} from "solady/utils/Base64.sol";
+import {LibString} from "solady/utils/LibString.sol";
 import {ICryptoIdolArtExtra} from "./ICryptoIdolArtExtra.sol";
 
 /**
@@ -105,7 +106,13 @@ contract CryptoIdolArt {
             'data:application/json;base64,',
             Base64.encode(
                 bytes(
-                abi.encodePacked('{"image": "data:image/svg+xml;base64,', Base64.encode(bytes(image)), '"}')
+                    abi.encodePacked(
+                        '{"image": "data:image/svg+xml;base64,',
+                        Base64.encode(bytes(image)),
+                        '", "attributes": [',
+                        '{"trait_type": "score", "value": "', LibString.toString(score), '"}',
+                        ']}'
+                    )
                 )
             )
         ));
