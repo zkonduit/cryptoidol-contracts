@@ -3,6 +3,12 @@
 ## Quick Start
 The project is built on Foundry
 
+To setup
+```
+git submodule init
+git submodule update --recursive --remote
+```
+
 
 To test
 ```
